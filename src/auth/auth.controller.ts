@@ -7,10 +7,15 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post()
-  async authenticate(@Body('privyJwt') privyJwt: string) {
+  async authenticate(@Body('token') privyJwt: string) {
     const isValid = this.authService.validatePrivyToken(privyJwt);
     if (!isValid) throw new UnauthorizedException();
-    const userId = 'cm2uh4g5800ol5e2i8bfrb9z6';
+
+    // Extract user ID from the decoded Privy JWT
+    const userId = this.authService.extractUserIdFromToken(privyJwt);
+    if (!userId)
+      throw new UnauthorizedException('User ID could not be extracted.');
+
     return { token: this.authService.generateMetaversalJwt(userId) };
   }
 }

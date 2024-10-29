@@ -1,11 +1,10 @@
-// src/database/migrate.ts
 import { NestFactory } from '@nestjs/core';
-import { DatabaseModule } from './database.module'; // Adjust the import path as necessary
+import { DatabaseModule } from './database.module';
 import { Kysely, PostgresDialect } from 'kysely';
 import path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
-import { readdirSync } from 'fs'; // Import the necessary function from fs
+import { readdirSync } from 'fs';
 
 async function runMigrations() {
   const appContext = await NestFactory.createApplicationContext(DatabaseModule);
@@ -26,7 +25,7 @@ async function runMigrations() {
 
   const migrationsDir = path.join(__dirname, 'migrations');
   const migrationFiles = readdirSync(migrationsDir)
-    .filter((file) => file.endsWith('.ts')) // Change to '.js' if compiled
+    .filter((file) => file.endsWith('.ts'))
     .sort();
 
   if (migrationFiles.length === 0) {

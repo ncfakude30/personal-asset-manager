@@ -5,9 +5,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from './entities/user.entity';
 import { Asset } from './entities/asset.entity';
 import { AssetDailyPrice } from './entities/asset_daily_price.entity';
-import { Database } from './types'
-import { Pool } from 'pg'
-import { Kysely, PostgresDialect } from 'kysely'
+import { Database } from './types';
+import { Pool } from 'pg';
+import { Kysely, PostgresDialect } from 'kysely';
 
 @Module({
   imports: [
@@ -23,7 +23,7 @@ import { Kysely, PostgresDialect } from 'kysely'
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [User, Asset, AssetDailyPrice],
-        synchronize: true, // For dev only. In production, use migrations
+        synchronize: true, // For dev only. In production, use migrations/<subjective>
       }),
     }),
   ],
@@ -31,18 +31,17 @@ import { Kysely, PostgresDialect } from 'kysely'
     {
       provide: 'KYSLEY_DB',
       useFactory: (configService: ConfigService) => {
-
         const pool = new Pool({
-            host: configService.get('POSTGRES_HOST'),
-            port: +configService.get('POSTGRES_PORT'), // Ensure port is a number
-            database: configService.get('POSTGRES_DB'),
-            user: configService.get('POSTGRES_USER'),
-            password: configService.get('POSTGRES_PASSWORD'),
-            max: 10,
-        })
+          host: configService.get('POSTGRES_HOST'),
+          port: +configService.get('POSTGRES_PORT'),
+          database: configService.get('POSTGRES_DB'),
+          user: configService.get('POSTGRES_USER'),
+          password: configService.get('POSTGRES_PASSWORD'),
+          max: 10,
+        });
 
         // Instantiate the dialect
-        const dialect = new PostgresDialect({ pool })
+        const dialect = new PostgresDialect({ pool });
 
         // Create the Kysely instance with your database interface
         return new Kysely<Database>({

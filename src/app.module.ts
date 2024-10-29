@@ -6,12 +6,13 @@ import { AssetsModule } from './assets/assets.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { APP_GUARD } from '@nestjs/core';
-import { AuthGuard } from './auth/auth.guard'; 
+import { AuthGuard } from './auth/auth.guard';
 
 @Module({
   imports: [AuthModule, AssetsModule, PortfolioModule, MetricsModule],
   controllers: [AppController],
-  providers: [AppService,
+  providers: [
+    AppService,
     {
       provide: APP_GUARD,
       useClass: AuthGuard, // Apply AuthGuard globally
