@@ -1,0 +1,52 @@
+name: CI/CD Pipeline
+
+# Trigger the pipeline on pull requests
+on:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository
+      - name: Checkout Code
+        uses: actions/checkout@v2
+      
+      # Cache npm dependencies to speed up builds
+      - name: Cache Node Modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Install project dependencies
+      - name: Install Dependencies
+        run: npm install
+        env:
+          NODE_ENV: development  # Set the environment to development
+
+      # Lint code for quality assurance
+      - name: Lint Code
+        run: npm run lint
+
+      # Build the project
+      - name: Build Project
+        run: npm run build
+
+      # Run tests with coverage report
+      - name: Run Tests
+        run: npm test -- --coverage
+
+      # Notify on success or failure (optional)
+      - name: Notify on Success
+        if: success()
+        run: echo "Build succeeded! 🚀"
+      
+      - name: Notify on Failure
+        if: failure()
+        run: echo "Build failed! ❌ Please check the logs."
