@@ -4,11 +4,10 @@ import { PortfolioController } from './portfolio.controller';
 import { DatabaseModule } from '../database/database.module';
 import { MetricsService } from '../metrics/metrics.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { AuthService } from '../auth/auth.service'
-
+import { AuthService } from '../auth/auth.service';
 
 @Module({
-    imports: [DatabaseModule],
+  imports: [DatabaseModule],
   providers: [PortfolioService, MetricsService, AuthService, AuthGuard],
   controllers: [PortfolioController],
 })

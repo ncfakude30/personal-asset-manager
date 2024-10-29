@@ -3,7 +3,7 @@ import { AssetsService } from './assets.service';
 import { AssetsController } from './assets.controller';
 import { DatabaseModule } from '../database/database.module';
 import { MetricsService } from '../metrics/metrics.service';
-import { AuthService } from '../auth/auth.service'
+import { AuthService } from '../auth/auth.service';
 
 @Module({
   imports: [DatabaseModule],

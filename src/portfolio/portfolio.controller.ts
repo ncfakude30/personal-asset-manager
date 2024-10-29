@@ -1,6 +1,6 @@
-import { Controller, Get, Param, Req, UseGuards,} from '@nestjs/common';
+import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { PortfolioService } from './portfolio.service';
-import { ApiTags} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 
 @ApiTags('Portfolio')

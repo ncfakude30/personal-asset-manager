@@ -1,5 +1,9 @@
 // src/portfolio/portfolio.service.ts
-import { Injectable, Inject, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { AssetDailyPrice } from '../database/types';
 import { MetricsService } from '../metrics/metrics.service';
@@ -11,7 +15,9 @@ export class PortfolioService {
     private readonly metrics: MetricsService,
   ) {}
 
-  async calculatePortfolioValue(userId: string): Promise<{ totalValue: number }> {
+  async calculatePortfolioValue(
+    userId: string,
+  ): Promise<{ totalValue: number }> {
     try {
       this.metrics.increment('portfolio.calculate_portfolio_value.count');
       const assets = await this.db
@@ -29,7 +35,7 @@ export class PortfolioService {
           .where('asset_id', '=', asset.id)
           .orderBy('date', 'desc')
           .limit(1)
-          .executeTakeFirst(); 
+          .executeTakeFirst();
 
         if (latestPrice) {
           totalValue += latestPrice.price * (asset.quantity || 1);
@@ -38,15 +44,20 @@ export class PortfolioService {
 
       this.metrics.increment('portfolio.calculate_portfolio_value.success');
       return { totalValue };
-    } catch (error) {
+    } catch (error: any) {
       this.metrics.increment('portfolio.calculate_portfolio_value.failure');
-      throw new InternalServerErrorException('Failed to calculate portfolio value');
+      throw new InternalServerErrorException(
+        'Failed to calculate portfolio value',
+      );
     }
   }
 
   async getAssetHistory(assetId: string): Promise<AssetDailyPrice[]> {
     try {
       this.metrics.increment('portfolio.get_asset_history.count');
+
+      //TODO: get from redis if caching is required before the DB
+
       const history = await this.db
         .selectFrom('asset_daily_price')
         .selectAll()
@@ -60,7 +71,6 @@ export class PortfolioService {
         date: record.date,
         price: record.price,
       })) as AssetDailyPrice[];
-      
     } catch (error) {
       this.metrics.increment('portfolio.get_asset_history.failure');
       throw new InternalServerErrorException('Failed to fetch asset history');

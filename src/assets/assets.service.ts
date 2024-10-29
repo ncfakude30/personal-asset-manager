@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { Asset } from '../database/types';
 import { MetricsService } from '../metrics/metrics.service';
-import { CreateAssetDto, RemoveAssetDto } from './dto/assets.dto';
+import { CreateAssetDto } from './dto/assets.dto';
 
 @Injectable()
 export class AssetsService {
