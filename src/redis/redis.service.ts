@@ -1,11 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { redisConfig } from '../../config/redis.config';
-import {
-  createClient,
-  RedisClientType,
-  RedisModules,
-  RedisScripts,
-} from 'redis';
+import { redisConfig } from '../config/redis.config';
+import { createClient, RedisClientType, RedisModules } from 'redis';
 import { ConfigType } from '@nestjs/config';
 
 @Injectable()
@@ -52,7 +47,7 @@ export class RedisService {
     try {
       const value = await this.client.get(key);
       return value ? JSON.parse(value) : null;
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(`Failed to get key ${key}: ${err?.message}`);
       throw err;
     }
@@ -66,7 +61,7 @@ export class RedisService {
       } else {
         await this.client.set(key, valueString);
       }
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(`Failed to set key ${key}: ${err?.message}`);
       throw err;
     }
@@ -75,7 +70,7 @@ export class RedisService {
   async del(key: string): Promise<void> {
     try {
       await this.client.del(key);
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(`Failed to delete key ${key}: ${err?.message}`);
       throw err;
     }
@@ -85,7 +80,7 @@ export class RedisService {
     try {
       const result = await this.client.exists(key);
       return result === 1;
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(
         `Failed to check existence of key ${key}: ${err.message}`,
       );
@@ -97,7 +92,7 @@ export class RedisService {
     try {
       await this.client.quit();
       this.logger.log(`Redis client disconnected successfully`);
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(`Failed to disconnect Redis client: ${err.message}`);
       throw err;
     }

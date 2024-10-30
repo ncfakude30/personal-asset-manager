@@ -7,9 +7,18 @@ import { PortfolioModule } from './portfolio/portfolio.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard';
+import { ConfigModule } from '@nestjs/config';
+import { authConfig } from './config/auth.config';
+import { redisConfig } from './config/redis.config';
 
 @Module({
-  imports: [AuthModule, AssetsModule, PortfolioModule, MetricsModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, load: [authConfig, redisConfig] }),
+    AuthModule,
+    AssetsModule,
+    PortfolioModule,
+    MetricsModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,
