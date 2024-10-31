@@ -61,9 +61,9 @@ export class AssetsService {
       .execute();
 
     return assets.map((asset) => ({
-      id: asset.id,
-      name: asset.name,
-      user_id: asset.user_id,
+      id: asset?.id,
+      name: asset?.name,
+      user_id: asset?.user_id,
     })) as Asset[];
   }
 }

@@ -32,7 +32,7 @@ export class PortfolioService {
         const latestPrice = await this.db
           .selectFrom('asset_daily_price')
           .selectAll()
-          .where('asset_id', '=', asset.id)
+          .where('asset_id', '=', asset?.id)
           .orderBy('date', 'desc')
           .limit(1)
           .executeTakeFirst();
