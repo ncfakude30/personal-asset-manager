@@ -46,6 +46,7 @@ export class PortfolioService {
       return { totalValue };
     } catch (error: any) {
       this.metrics.increment('portfolio.calculate_portfolio_value.failure');
+      console.log(error);
       throw new InternalServerErrorException(
         'Failed to calculate portfolio value',
       );
@@ -72,6 +73,7 @@ export class PortfolioService {
         price: record.price,
       })) as AssetDailyPrice[];
     } catch (error) {
+      console.log(error);
       this.metrics.increment('portfolio.get_asset_history.failure');
       throw new InternalServerErrorException('Failed to fetch asset history');
     }
