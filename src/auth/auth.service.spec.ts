@@ -1,142 +1,158 @@
-// src/auth/auth.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { UnauthorizedException } from '@nestjs/common';
-import jwt_decode from 'jwt-decode';
-import * as jwt from 'jsonwebtoken';
+import {
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { MetricsService } from '../metrics/metrics.service';
+import { authConfig } from '../config/auth.config';
+import { ConfigType } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
+import jwt_decode from 'jwt-decode';
 
-jest.mock('jsonwebtoken'); // Mock the jsonwebtoken module
-jest.mock('jwt-decode'); // Mock the jwt-decode module
+jest.mock('jwt-decode', () => jest.fn());
+jest.mock('jsonwebtoken', () => ({
+  sign: jest.fn(),
+}));
 
 describe('AuthService', () => {
-  let authService: AuthService;
+  let service: AuthService;
+  let metricsService: MetricsService;
+
+  const mockAuthConfig: ConfigType<typeof authConfig> = {
+    secretKey: 'testSecretKey',
+    expiresIn: '1h',
+  };
+
+  const mockMetricsService = {
+    increment: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AuthService, { provide: MetricsService, useValue: {} }], // Mock MetricsService if needed
+      providers: [
+        AuthService,
+        { provide: authConfig.KEY, useValue: mockAuthConfig },
+        { provide: MetricsService, useValue: mockMetricsService },
+      ],
     }).compile();
 
-    authService = module.get<AuthService>(AuthService);
+    service = module.get<AuthService>(AuthService);
+    metricsService = module.get<MetricsService>(MetricsService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('validatePrivyToken', () => {
-    it('should return true for a valid token', () => {
-      const validJwt = 'valid.jwt.token';
+    it('should validate a valid token', () => {
+      const mockToken = 'validToken';
       const decodedToken = {
-        userId: 'testUserId',
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
+        userId: '123',
+        exp: Math.floor(Date.now() / 1000) + 1000,
+        iat: Date.now() / 1000,
       };
 
-      (jwt_decode as jest.Mock).mockReturnValue(decodedToken); // Mocking successful decoding
+      (jwt_decode as jest.Mock).mockReturnValue(decodedToken);
+      const result = service.validatePrivyToken(mockToken);
 
-      expect(authService.validatePrivyToken(validJwt)).toBe(true);
-    });
-
-    it('should throw UnauthorizedException if userId is missing', () => {
-      const invalidJwt = 'invalid.jwt.token';
-      const decodedToken = {
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-      };
-
-      (jwt_decode as jest.Mock).mockReturnValue(decodedToken); // Mocking userId missing
-
-      expect(() => authService.validatePrivyToken(invalidJwt)).toThrow(
-        UnauthorizedException,
+      expect(result).toBe(true);
+      expect(metricsService.increment).toHaveBeenCalledWith(
+        'auth.validate_privy_token.success',
       );
     });
 
     it('should throw UnauthorizedException if token is expired', () => {
-      const expiredJwt = 'expired.jwt.token';
+      const mockToken = 'expiredToken';
       const decodedToken = {
-        userId: 'testUserId',
-        exp: Math.floor(Date.now() / 1000) - 1,
-        iat: Math.floor(Date.now() / 1000),
+        userId: '123',
+        exp: Math.floor(Date.now() / 1000) - 1000,
+        iat: Date.now() / 1000,
       };
 
-      (jwt_decode as jest.Mock).mockReturnValue(decodedToken); // Mocking expired token
+      (jwt_decode as jest.Mock).mockReturnValue(decodedToken);
 
-      expect(() => authService.validatePrivyToken(expiredJwt)).toThrow(
+      expect(() => service.validatePrivyToken(mockToken)).toThrow(
         UnauthorizedException,
+      );
+      expect(metricsService.increment).toHaveBeenCalledWith(
+        'auth.validate_privy_token.expired_token',
       );
     });
 
-    it('should throw UnauthorizedException for an invalid token', () => {
-      const invalidJwt = 'invalid.jwt.token';
+    it('should throw UnauthorizedException if token is missing userId', () => {
+      const mockToken = 'invalidToken';
+      const decodedToken = {
+        exp: Math.floor(Date.now() / 1000) + 1000,
+        iat: Date.now() / 1000,
+      };
 
-      (jwt_decode as jest.Mock).mockImplementation(() => {
-        throw new Error('Invalid token');
-      }); // Mocking error
+      (jwt_decode as jest.Mock).mockReturnValue(decodedToken);
 
-      expect(() => authService.validatePrivyToken(invalidJwt)).toThrow(
+      expect(() => service.validatePrivyToken(mockToken)).toThrow(
         UnauthorizedException,
+      );
+      expect(metricsService.increment).toHaveBeenCalledWith(
+        'auth.validate_privy_token.invalid_token',
       );
     });
   });
 
   describe('extractUserIdFromToken', () => {
     it('should return userId from a valid token', () => {
-      const validJwt = 'valid.jwt.token';
+      const mockToken = 'validToken';
       const decodedToken = {
-        userId: 'testUserId',
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
+        userId: '123',
+        exp: Math.floor(Date.now() / 1000) + 1000,
+        iat: Date.now() / 1000,
       };
 
-      (jwt_decode as jest.Mock).mockReturnValue(decodedToken); // Mocking successful decoding
+      (jwt_decode as jest.Mock).mockReturnValue(decodedToken);
 
-      const userId = authService.extractUserIdFromToken(validJwt);
-      expect(userId).toBe('testUserId');
+      const result = service.extractUserIdFromToken(mockToken);
+      expect(result).toBe('123');
     });
 
-    it('should return null if userId is not present', () => {
-      const invalidJwt = 'invalid.jwt.token';
-      const decodedToken = {
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-      };
-
-      (jwt_decode as jest.Mock).mockReturnValue(decodedToken); // Mocking userId missing
-
-      const userId = authService.extractUserIdFromToken(invalidJwt);
-      expect(userId).toBe(null);
-    });
-
-    it('should throw UnauthorizedException if token is invalid', () => {
-      const invalidJwt = 'invalid.jwt.token';
-
+    it('should throw UnauthorizedException if extraction fails', () => {
       (jwt_decode as jest.Mock).mockImplementation(() => {
-        throw new Error('Failed to decode');
-      }); // Mocking error
+        throw new Error('Decoding error');
+      });
 
-      expect(() => authService.extractUserIdFromToken(invalidJwt)).toThrow(
+      expect(() => service.extractUserIdFromToken('invalidToken')).toThrow(
         UnauthorizedException,
+      );
+      expect(metricsService.increment).toHaveBeenCalledWith(
+        'extraction_errors',
       );
     });
   });
 
   describe('generateMetaversalJwt', () => {
-    it('should generate a valid JWT', () => {
-      const userId = 'testUserId';
-      const secretKey = 'superSecretKey';
-      process.env.PRIVY_SECRET_KEY = secretKey; // Mock environment variable
+    it('should generate a JWT with a given userId', () => {
+      const mockUserId = '123';
+      const mockToken = 'generatedToken';
+      (jwt.sign as jest.Mock).mockReturnValue(mockToken);
 
-      (jwt.sign as jest.Mock).mockReturnValue('generated.jwt.token'); // Mocking JWT generation
+      const result = service.generateMetaversalJwt(mockUserId);
 
-      const token = authService.generateMetaversalJwt(userId);
-      expect(token).toBe('generated.jwt.token');
-      expect(jwt.sign).toHaveBeenCalledWith({ userId }, secretKey, {
-        expiresIn: '1h',
-      });
+      expect(result).toBe(mockToken);
+      expect(jwt.sign).toHaveBeenCalledWith(
+        { userId: mockUserId },
+        mockAuthConfig.secretKey,
+        { expiresIn: mockAuthConfig.expiresIn },
+      );
+      expect(metricsService.increment).toHaveBeenCalledWith('generated_tokens');
     });
 
-    it('should throw an error if secret key is not defined', () => {
-      delete process.env.PRIVY_SECRET_KEY; // Remove the secret key
+    it('should throw InternalServerErrorException if secretKey is missing', () => {
+      const serviceWithoutSecret = new AuthService(
+        { ...mockAuthConfig, secretKey: '' },
+        mockMetricsService as any,
+      );
 
-      expect(() => authService.generateMetaversalJwt('testUserId')).toThrow(
-        'Secret key is not defined in environment variables',
+      expect(() => serviceWithoutSecret.generateMetaversalJwt('123')).toThrow(
+        InternalServerErrorException,
       );
     });
   });

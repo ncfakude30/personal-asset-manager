@@ -1,128 +1,134 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PortfolioService } from './portfolio.service';
-import { Kysely } from 'kysely';
+import { MetricsService } from '../metrics/metrics.service';
+import { InternalServerErrorException } from '@nestjs/common';
+import { AssetDailyPrice } from '../database/types';
 
 describe('PortfolioService', () => {
   let service: PortfolioService;
-  let db: Partial<Kysely<any>>;
+  let db: any;
+  let metrics: MetricsService;
+
+  const mockMetricsService = {
+    increment: jest.fn(),
+  };
+
+  const mockDb = {
+    selectFrom: jest.fn(() => mockDb),
+    selectAll: jest.fn(() => mockDb),
+    where: jest.fn(() => mockDb),
+    orderBy: jest.fn(() => mockDb),
+    limit: jest.fn(() => mockDb),
+    execute: jest.fn(),
+    executeTakeFirst: jest.fn(),
+  };
 
   beforeEach(async () => {
-    db = {
-      selectFrom: jest.fn(() => ({
-        selectAll: jest.fn(() => ({
-          where: jest.fn(() => ({
-            execute: jest.fn(),
-            orderBy: jest.fn(() => ({
-              limit: jest.fn(() => ({
-                executeTakeFirst: jest.fn(),
-              })),
-            })),
-          })),
-        })),
-      })),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PortfolioService, { provide: 'KYSLEY_DB', useValue: db }],
+      providers: [
+        PortfolioService,
+        { provide: 'KYSLEY_DB', useValue: mockDb },
+        { provide: MetricsService, useValue: mockMetricsService },
+      ],
     }).compile();
 
     service = module.get<PortfolioService>(PortfolioService);
+    db = module.get('KYSLEY_DB');
+    metrics = module.get<MetricsService>(MetricsService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('calculatePortfolioValue', () => {
-    it('should return total portfolio value', async () => {
-      const userId = 'testUserId';
+    it('should calculate and return the total portfolio value for a user', async () => {
+      const userId = 'user1';
       const assets = [
-        { id: 'asset1', quantity: 2 },
-        { id: 'asset2', quantity: 3 },
+        { id: 'asset1', quantity: 10 },
+        { id: 'asset2', quantity: 5 },
       ];
-      const latestPrices = [
-        { price: 100, asset_id: 'asset1' },
-        { price: 200, asset_id: 'asset2' },
+      const assetPrices = [
+        { price: 100 }, // Latest price for asset1
+        { price: 200 }, // Latest price for asset2
       ];
 
-      (db.selectFrom as jest.Mock).mockReturnValueOnce({
-        selectAll: jest.fn().mockReturnValueOnce({
-          where: jest.fn().mockReturnValueOnce({
-            execute: jest.fn().mockResolvedValueOnce(assets), // Mocking asset query
-          }),
-        }),
-      });
-
-      (db.selectFrom as jest.Mock).mockReturnValueOnce({
-        selectAll: jest.fn().mockReturnValueOnce({
-          where: jest.fn().mockReturnValueOnce({
-            orderBy: jest.fn().mockReturnValueOnce({
-              limit: jest.fn().mockReturnValueOnce({
-                executeTakeFirst: jest
-                  .fn()
-                  .mockResolvedValueOnce(latestPrices[0]) // Mocking price for asset1
-                  .mockResolvedValueOnce(latestPrices[1]), // Mocking price for asset2
-              }),
-            }),
-          }),
-        }),
-      });
+      db.execute.mockResolvedValueOnce(assets);
+      db.executeTakeFirst
+        .mockResolvedValueOnce(assetPrices[0]) // for asset1
+        .mockResolvedValueOnce(assetPrices[1]); // for asset2
 
       const result = await service.calculatePortfolioValue(userId);
-      expect(result).toEqual({ totalValue: 800 }); // (2 * 100) + (3 * 200)
+
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.calculate_portfolio_value.count',
+      );
+      expect(db.selectFrom).toHaveBeenCalledWith('assets');
+      expect(db.where).toHaveBeenCalledWith('user_id', '=', userId);
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.calculate_portfolio_value.success',
+      );
+      expect(result.totalValue).toBe(100 * 10 + 200 * 5);
     });
 
-    it('should return zero if no assets are found', async () => {
-      const userId = 'testUserId';
+    it('should increment failure metric and throw error if calculation fails', async () => {
+      const userId = 'user1';
+      const error = new Error('DB Error');
 
-      (db.selectFrom as jest.Mock).mockReturnValueOnce({
-        selectAll: jest.fn().mockReturnValueOnce({
-          where: jest.fn().mockReturnValueOnce({
-            execute: jest.fn().mockResolvedValueOnce([]), // No assets
-          }),
-        }),
-      });
+      db.execute.mockRejectedValueOnce(error);
 
-      const result = await service.calculatePortfolioValue(userId);
-      expect(result).toEqual({ totalValue: 0 });
+      await expect(service.calculatePortfolioValue(userId)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.calculate_portfolio_value.count',
+      );
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.calculate_portfolio_value.failure',
+      );
     });
   });
 
   describe('getAssetHistory', () => {
-    it('should return asset price history', async () => {
+    it('should return the history of asset prices', async () => {
       const assetId = 'asset1';
-      const historyRecords = [
-        { asset_id: assetId, date: '2023-01-01', price: 100 },
-        { asset_id: assetId, date: '2023-01-02', price: 120 },
+      const historyData: AssetDailyPrice[] = [
+        { asset_id: assetId, date: new Date('2023-01-01'), price: 100 },
+        { asset_id: assetId, date: new Date('2023-01-02'), price: 110 },
       ];
 
-      (db.selectFrom as jest.Mock).mockReturnValueOnce({
-        selectAll: jest.fn().mockReturnValueOnce({
-          where: jest.fn().mockReturnValueOnce({
-            execute: jest.fn().mockResolvedValueOnce(historyRecords), // Mocking history query
-          }),
-        }),
-      });
+      db.execute.mockResolvedValueOnce(historyData);
 
       const result = await service.getAssetHistory(assetId);
-      expect(result).toEqual(historyRecords);
-      expect(db.selectFrom).toHaveBeenCalledWith('asset_daily_price');
-      expect(db.selectFrom().selectAll().where).toHaveBeenCalledWith(
-        'asset_id',
-        '=',
-        assetId,
+
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.get_asset_history.count',
       );
+      expect(db.selectFrom).toHaveBeenCalledWith('asset_daily_price');
+      expect(db.where).toHaveBeenCalledWith('asset_id', '=', assetId);
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.get_asset_history.success',
+      );
+      expect(result).toEqual(historyData);
     });
 
-    it('should return an empty array if no history is found', async () => {
+    it('should increment failure metric and throw error if fetching history fails', async () => {
       const assetId = 'asset1';
+      const error = new Error('DB Error');
 
-      (db.selectFrom as jest.Mock).mockReturnValueOnce({
-        selectAll: jest.fn().mockReturnValueOnce({
-          where: jest.fn().mockReturnValueOnce({
-            execute: jest.fn().mockResolvedValueOnce([]), // No history
-          }),
-        }),
-      });
+      db.execute.mockRejectedValueOnce(error);
 
-      const result = await service.getAssetHistory(assetId);
-      expect(result).toEqual([]);
+      await expect(service.getAssetHistory(assetId)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.get_asset_history.count',
+      );
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'portfolio.get_asset_history.failure',
+      );
     });
   });
 });

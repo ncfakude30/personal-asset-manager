@@ -26,6 +26,7 @@ export class AssetsService {
       this.metrics.increment('assets.add_asset.success');
       return newAsset as Asset;
     } catch (error) {
+      console.log(error);
       this.metrics.increment('assets.add_asset.failure');
       throw new Error('Could not add asset');
     }

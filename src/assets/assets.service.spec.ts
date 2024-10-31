@@ -1,91 +1,127 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssetsService } from './assets.service';
-import { Kysely } from 'kysely';
-import { Asset } from '../../src/database/types';
+import { MetricsService } from '../metrics/metrics.service';
+import { Asset } from '../database/types';
+import { CreateAssetDto } from './dto/assets.dto';
 
 describe('AssetsService', () => {
   let service: AssetsService;
-  let db: Partial<Kysely<any>>;
+  let db: any;
+  let metrics: MetricsService;
+
+  const mockMetricsService = {
+    increment: jest.fn(),
+    decrement: jest.fn(),
+  };
+
+  const mockDb = {
+    insertInto: jest.fn(() => mockDb),
+    values: jest.fn(() => mockDb),
+    returningAll: jest.fn(() => mockDb),
+    execute: jest.fn(),
+
+    selectFrom: jest.fn(() => mockDb),
+    select: jest.fn(() => mockDb),
+    where: jest.fn(() => mockDb),
+    selectAll: jest.fn(() => mockDb),
+
+    deleteFrom: jest.fn(() => mockDb),
+  };
 
   beforeEach(async () => {
-    db = {
-      insertInto: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      returningAll: jest.fn().mockReturnThis(),
-      execute: jest.fn(),
-      deleteFrom: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      selectFrom: jest.fn().mockReturnThis(),
-      selectAll: jest.fn().mockReturnThis(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AssetsService, { provide: 'KYSLEY_DB', useValue: db }],
+      providers: [
+        AssetsService,
+        { provide: 'KYSLEY_DB', useValue: mockDb },
+        { provide: MetricsService, useValue: mockMetricsService },
+      ],
     }).compile();
 
     service = module.get<AssetsService>(AssetsService);
+    db = module.get('KYSLEY_DB');
+    metrics = module.get<MetricsService>(MetricsService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('addAsset', () => {
-    it('should add a new asset and return it', async () => {
-      const userId = 'testUserId';
-      const assetData = {
-        name: 'Test Asset',
-        description: 'Asset description',
-      };
-      const newAsset = { id: '1', user_id: userId, ...assetData };
+    it('should add an asset and return the new asset', async () => {
+      const userId = 'user1';
+      const assetData: CreateAssetDto = { name: 'Test Asset' } as any;
+      const newAsset = { id: 'asset1', ...assetData, user_id: userId };
 
-      (db.execute as jest.Mock).mockResolvedValueOnce([newAsset]); // Mocking the insert operation
+      db.execute.mockResolvedValueOnce([newAsset]);
 
       const result = await service.addAsset(userId, assetData);
-      expect(result).toEqual(newAsset);
+
+      expect(metrics.increment).toHaveBeenCalledWith('assets.add_asset.count');
       expect(db.insertInto).toHaveBeenCalledWith('assets');
       expect(db.values).toHaveBeenCalledWith({ ...assetData, user_id: userId });
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'assets.add_asset.success',
+      );
+      expect(result).toEqual(newAsset);
     });
 
-    it('should throw an error if adding an asset fails', async () => {
-      const userId = 'testUserId';
-      const assetData = {
-        name: 'Test Asset',
-        description: 'Asset description',
-      };
+    it('should increment failure metric and throw an error if adding asset fails', async () => {
+      const userId = 'user1';
+      const assetData: CreateAssetDto = { name: 'Test Asset' } as any;
+      const error = new Error('Failed to add asset');
 
-      (db.execute as jest.Mock).mockRejectedValueOnce(new Error('DB error'));
+      db.execute.mockRejectedValueOnce(error);
 
       await expect(service.addAsset(userId, assetData)).rejects.toThrow(
         'Could not add asset',
+      );
+      expect(metrics.increment).toHaveBeenCalledWith('assets.add_asset.count');
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'assets.add_asset.failure',
       );
     });
   });
 
   describe('removeAsset', () => {
-    it('should remove an asset', async () => {
-      const userId = 'testUserId';
-      const assetId = '1';
+    it('should remove an asset if it exists and is owned by the user', async () => {
+      const userId = 'user1';
+      const assetId = 'asset1';
+      db.execute.mockResolvedValueOnce([{ id: assetId }]);
 
       await service.removeAsset(userId, assetId);
 
+      expect(db.selectFrom).toHaveBeenCalledWith('assets');
       expect(db.deleteFrom).toHaveBeenCalledWith('assets');
-      expect(db.where).toHaveBeenCalledWith('id', '=', assetId);
-      expect(db.where).toHaveBeenCalledWith('user_id', '=', userId);
-      expect(db.execute).toHaveBeenCalled();
+      expect(metrics.decrement).toHaveBeenCalledWith('assets_removed');
+    });
+
+    it('should throw an error if the asset does not exist or is not owned by the user', async () => {
+      const userId = 'user1';
+      const assetId = 'asset1';
+
+      db.execute.mockResolvedValueOnce([]);
+
+      await expect(service.removeAsset(userId, assetId)).rejects.toThrow(
+        'Asset not found or not owned by user',
+      );
     });
   });
 
   describe('listAssets', () => {
-    it('should return a list of assets for a user', async () => {
-      const userId = 'testUserId';
+    it('should list all assets for a given user', async () => {
+      const userId = 'user1';
       const assets = [
-        { id: '1', name: 'Asset 1', user_id: userId },
-        { id: '2', name: 'Asset 2', user_id: userId },
+        { id: 'asset1', name: 'Asset 1', user_id: userId },
+        { id: 'asset2', name: 'Asset 2', user_id: userId },
       ];
 
-      (db.execute as jest.Mock).mockResolvedValueOnce(assets);
+      db.execute.mockResolvedValueOnce(assets);
 
       const result = await service.listAssets(userId);
-      expect(result).toEqual(assets);
+
       expect(db.selectFrom).toHaveBeenCalledWith('assets');
       expect(db.where).toHaveBeenCalledWith('user_id', '=', userId);
+      expect(result).toEqual(assets);
     });
   });
 });
