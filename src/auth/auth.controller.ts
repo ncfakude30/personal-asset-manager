@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  //Ideally we would want to get the token from the Headers <Authorization -> JWT Token>
   @Post()
   async authenticate(@Body('token') privyJwt: string) {
     const isValid = this.authService.validatePrivyToken(privyJwt);
